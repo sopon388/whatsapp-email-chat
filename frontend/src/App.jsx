@@ -1,6 +1,13 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState
+} from "react";
+
 import axios from "axios";
+
 import { io } from "socket.io-client";
+
 import {
   Search,
   Send,
@@ -8,18 +15,23 @@ import {
   MessageCircle,
   Check,
   CheckCheck,
-  ArrowLeft,
+  ArrowLeft
 } from "lucide-react";
 
+
 const API =
-  import.meta.env.VITE_API_URL || "http://localhost:5000";
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000";
+
 
 const api = axios.create({
-  baseURL: API,
+  baseURL: API
 });
 
+
 function setAuth(token) {
-  api.defaults.headers.common.Authorization = `Bearer ${token}`;
+  api.defaults.headers.common.Authorization =
+    `Bearer ${token}`;
 }
 
 
@@ -28,35 +40,67 @@ function setAuth(token) {
 // =====================================================
 
 export default function App() {
-  const [token, setToken] = useState(
-    localStorage.getItem("token")
-  );
 
-  const [me, setMe] = useState(null);
+  const [token, setToken] =
+    useState(
+      localStorage.getItem("token")
+    );
 
-  const [authMode, setAuthMode] = useState("login");
+  const [me, setMe] =
+    useState(null);
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] =
+    useState("login");
 
-  const [searchEmail, setSearchEmail] = useState("");
-  const [found, setFound] = useState(null);
+  const [name, setName] =
+    useState("");
 
-  const [chat, setChat] = useState(null);
-  const [messages, setMessages] = useState([]);
+  const [email, setEmail] =
+    useState("");
 
-  const [text, setText] = useState("");
+  const [password, setPassword] =
+    useState("");
 
-  const [typing, setTyping] = useState(false);
-  const [online, setOnline] = useState(false);
+  const [searchEmail, setSearchEmail] =
+    useState("");
 
-  const socketRef = useRef(null);
-  const bottom = useRef(null);
-  const typingTimer = useRef(null);
+  const [found, setFound] =
+    useState(null);
 
-  // Keep latest chat available inside socket callbacks
-  const chatRef = useRef(null);
+  const [recentChats, setRecentChats] =
+    useState([]);
+
+  const [chat, setChat] =
+    useState(null);
+
+  const [messages, setMessages] =
+    useState([]);
+
+  const [text, setText] =
+    useState("");
+
+  const [typing, setTyping] =
+    useState(false);
+
+  const [online, setOnline] =
+    useState(false);
+
+  const socketRef =
+    useRef(null);
+
+  const bottom =
+    useRef(null);
+
+  const typingTimer =
+    useRef(null);
+
+  const chatRef =
+    useRef(null);
+
+
+  // =====================================================
+  // KEEP LATEST CHAT
+  // =====================================================
 
   useEffect(() => {
     chatRef.current = chat;
@@ -68,6 +112,7 @@ export default function App() {
   // =====================================================
 
   useEffect(() => {
+
     if (!token) return;
 
     setAuth(token);
@@ -80,7 +125,46 @@ export default function App() {
       .catch(() => {
         logout();
       });
+
   }, [token]);
+
+
+  // =====================================================
+  // LOAD RECENT CHATS
+  // =====================================================
+
+  useEffect(() => {
+
+    if (!token) return;
+
+    loadRecentChats();
+
+  }, [token]);
+
+
+  async function loadRecentChats() {
+
+    try {
+
+      const response =
+        await api.get(
+          "/api/conversations"
+        );
+
+      setRecentChats(
+        response.data.conversations || []
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Recent chats error:",
+        error.response?.data ||
+          error.message
+      );
+
+    }
+  }
 
 
   // =====================================================
@@ -88,186 +172,338 @@ export default function App() {
   // =====================================================
 
   useEffect(() => {
+
     if (!token) return;
 
-    const socket = io(API, {
-      auth: {
-        token,
-      },
-    });
+    const socket =
+      io(API, {
+        auth: {
+          token
+        }
+      });
 
-    socketRef.current = socket;
-
-
-    // -----------------------------------------------------
-    // SOCKET CONNECT
-    // -----------------------------------------------------
-
-    socket.on("connect", () => {
-      console.log("Socket connected:", socket.id);
-    });
+    socketRef.current =
+      socket;
 
 
-    // -----------------------------------------------------
-    // SOCKET ERROR
-    // -----------------------------------------------------
-
-    socket.on("connect_error", (error) => {
-      console.error(
-        "Socket connection error:",
-        error.message
-      );
-    });
-
-
-    // =====================================================
-    // NEW MESSAGE RECEIVED
-    // =====================================================
-
-    socket.on("message:new", (message) => {
-      const currentChat = chatRef.current;
-
-      if (!currentChat) return;
-
-      const senderId =
-        typeof message.sender === "object"
-          ? message.sender?._id
-          : message.sender;
-
-      if (
-        String(senderId) ===
-        String(currentChat.id)
-      ) {
-        setMessages((previous) => {
-          const exists = previous.some(
-            (item) =>
-              String(item._id) ===
-              String(message._id)
-          );
-
-          if (exists) {
-            return previous;
-          }
-
-          return [...previous, message];
-        });
+    socket.on(
+      "connect",
+      () => {
+        console.log(
+          "Socket connected:",
+          socket.id
+        );
       }
-    });
+    );
 
 
-    // =====================================================
-    // MESSAGE SENT BY CURRENT USER
-    // =====================================================
-
-    socket.on("message:sent", (message) => {
-      const currentChat = chatRef.current;
-
-      if (!currentChat) return;
-
-      const receiverId =
-        typeof message.receiver === "object"
-          ? message.receiver?._id
-          : message.receiver;
-
-      if (
-        String(receiverId) ===
-        String(currentChat.id)
-      ) {
-        setMessages((previous) => {
-          const exists = previous.some(
-            (item) =>
-              String(item._id) ===
-              String(message._id)
-          );
-
-          if (exists) {
-            return previous;
-          }
-
-          return [...previous, message];
-        });
+    socket.on(
+      "connect_error",
+      (error) => {
+        console.error(
+          "Socket connection error:",
+          error.message
+        );
       }
-    });
+    );
 
 
-    // =====================================================
-    // TYPING
-    // =====================================================
+    // =================================================
+    // NEW MESSAGE
+    // =================================================
 
-    socket.on("typing", (data) => {
-      const currentChat = chatRef.current;
+    socket.on(
+      "message:new",
+      (message) => {
 
-      if (
-        currentChat &&
-        String(currentChat.id) ===
-          String(data.userId)
-      ) {
-        setTyping(true);
-      }
-    });
+        const currentChat =
+          chatRef.current;
 
+        if (!currentChat) return;
 
-    // =====================================================
-    // STOP TYPING
-    // =====================================================
+        const senderId =
+          typeof message.sender ===
+          "object"
+            ? message.sender?._id
+            : message.sender;
 
-    socket.on("stopTyping", (data) => {
-      const currentChat = chatRef.current;
+        if (
+          String(senderId) ===
+          String(currentChat.id)
+        ) {
 
-      if (
-        currentChat &&
-        String(currentChat.id) ===
-          String(data.userId)
-      ) {
-        setTyping(false);
-      }
-    });
+          setMessages(
+            (previous) => {
 
+              const exists =
+                previous.some(
+                  (item) =>
+                    String(item._id) ===
+                    String(message._id)
+                );
 
-    // =====================================================
-    // ONLINE / OFFLINE
-    // =====================================================
-
-    socket.on("presence", (data) => {
-      const currentChat = chatRef.current;
-
-      if (
-        currentChat &&
-        String(currentChat.id) ===
-          String(data.userId)
-      ) {
-        setOnline(data.online);
-      }
-    });
-
-
-    // =====================================================
-    // MESSAGE READ
-    // =====================================================
-
-    socket.on("message:read", (data) => {
-      setMessages((previous) =>
-        previous.map((message) =>
-          String(message._id) ===
-          String(data.messageId)
-            ? {
-                ...message,
-                read: true,
+              if (exists) {
+                return previous;
               }
-            : message
-        )
-      );
-    });
+
+              return [
+                ...previous,
+                message
+              ];
+            }
+          );
+
+        }
+      }
+    );
 
 
-    // =====================================================
+    // =================================================
+    // MESSAGE SENT
+    // =================================================
+
+    socket.on(
+      "message:sent",
+      (message) => {
+
+        const currentChat =
+          chatRef.current;
+
+        if (!currentChat) return;
+
+        const receiverId =
+          typeof message.receiver ===
+          "object"
+            ? message.receiver?._id
+            : message.receiver;
+
+        if (
+          String(receiverId) ===
+          String(currentChat.id)
+        ) {
+
+          setMessages(
+            (previous) => {
+
+              const exists =
+                previous.some(
+                  (item) =>
+                    String(item._id) ===
+                    String(message._id)
+                );
+
+              if (exists) {
+                return previous;
+              }
+
+              return [
+                ...previous,
+                message
+              ];
+            }
+          );
+
+        }
+      }
+    );
+
+
+    // =================================================
+    // CONVERSATION UPDATE
+    // =================================================
+
+    socket.on(
+      "conversation:update",
+      (data) => {
+
+        setRecentChats(
+          (previous) => {
+
+            const index =
+              previous.findIndex(
+                (item) =>
+                  String(item.id) ===
+                  String(data.userId)
+              );
+
+
+            // =========================================
+            // EXISTING CHAT
+            // =========================================
+
+            if (index !== -1) {
+
+              const updated = {
+                ...previous[index],
+
+                lastMessage:
+                  data.lastMessage,
+
+                lastMessageAt:
+                  data.lastMessageAt
+              };
+
+              const newList =
+                [...previous];
+
+              newList.splice(
+                index,
+                1
+              );
+
+              newList.unshift(
+                updated
+              );
+
+              return newList;
+            }
+
+
+            // =========================================
+            // NEW CHAT
+            // =========================================
+
+            loadRecentChats();
+
+            return previous;
+          }
+        );
+
+      }
+    );
+
+
+    // =================================================
+    // TYPING
+    // =================================================
+
+    socket.on(
+      "typing",
+      (data) => {
+
+        const currentChat =
+          chatRef.current;
+
+        if (
+          currentChat &&
+          String(currentChat.id) ===
+          String(data.userId)
+        ) {
+
+          setTyping(true);
+
+        }
+      }
+    );
+
+
+    // =================================================
+    // STOP TYPING
+    // =================================================
+
+    socket.on(
+      "stopTyping",
+      (data) => {
+
+        const currentChat =
+          chatRef.current;
+
+        if (
+          currentChat &&
+          String(currentChat.id) ===
+          String(data.userId)
+        ) {
+
+          setTyping(false);
+
+        }
+      }
+    );
+
+
+    // =================================================
+    // ONLINE / OFFLINE
+    // =================================================
+
+    socket.on(
+      "presence",
+      (data) => {
+
+        const currentChat =
+          chatRef.current;
+
+        setRecentChats(
+          (previous) =>
+            previous.map(
+              (item) =>
+                String(item.id) ===
+                String(data.userId)
+                  ? {
+                      ...item,
+                      online:
+                        data.online,
+                      lastSeen:
+                        data.lastSeen
+                    }
+                  : item
+            )
+        );
+
+
+        if (
+          currentChat &&
+          String(currentChat.id) ===
+          String(data.userId)
+        ) {
+
+          setOnline(
+            data.online
+          );
+
+        }
+      }
+    );
+
+
+    // =================================================
+    // MESSAGE READ
+    // =================================================
+
+    socket.on(
+      "message:read",
+      (data) => {
+
+        setMessages(
+          (previous) =>
+            previous.map(
+              (message) =>
+                String(message._id) ===
+                String(data.messageId)
+                  ? {
+                      ...message,
+                      read: true
+                    }
+                  : message
+            )
+        );
+
+      }
+    );
+
+
+    // =================================================
     // CLEANUP
-    // =====================================================
+    // =================================================
 
     return () => {
+
       socket.disconnect();
-      socketRef.current = null;
+
+      socketRef.current =
+        null;
+
     };
+
   }, [token]);
 
 
@@ -276,9 +512,11 @@ export default function App() {
   // =====================================================
 
   useEffect(() => {
+
     bottom.current?.scrollIntoView({
-      behavior: "smooth",
+      behavior: "smooth"
     });
+
   }, [messages, typing]);
 
 
@@ -287,42 +525,63 @@ export default function App() {
   // =====================================================
 
   async function submitAuth(e) {
+
     e.preventDefault();
 
     try {
+
       const url =
         authMode === "login"
           ? "/api/auth/login"
           : "/api/auth/register";
 
-      const r = await api.post(url, {
-        name,
-        email,
-        password,
-      });
+
+      const response =
+        await api.post(
+          url,
+          {
+            name,
+            email,
+            password
+          }
+        );
+
 
       localStorage.setItem(
         "token",
-        r.data.token
+        response.data.token
       );
 
-      setToken(r.data.token);
-      setMe(r.data.user);
+
+      setToken(
+        response.data.token
+      );
+
+
+      setMe(
+        response.data.user
+      );
+
 
       setName("");
       setEmail("");
       setPassword("");
-    } catch (e) {
+
+    } catch (error) {
+
       console.error(
         "Authentication error:",
-        e.response?.data || e.message
+        error.response?.data ||
+          error.message
       );
 
       alert(
-        e.response?.data?.message ||
-          "Something went wrong"
+        error.response?.data?.message ||
+        "Something went wrong"
       );
+
     }
+
   }
 
 
@@ -331,30 +590,48 @@ export default function App() {
   // =====================================================
 
   async function search() {
+
     if (!searchEmail.trim()) {
       return;
     }
 
     try {
-      const r = await api.get(
-        `/api/users/search?email=${encodeURIComponent(
-          searchEmail.trim()
-        )}`
+
+      const response =
+        await api.get(
+          `/api/users/search?email=${encodeURIComponent(
+            searchEmail.trim()
+          )}`
+        );
+
+
+      setFound(
+        response.data.user
       );
 
-      setFound(r.data.user);
 
-      if (!r.data.user) {
-        alert("No user found with this email");
+      if (!response.data.user) {
+
+        alert(
+          "No user found with this email"
+        );
+
       }
-    } catch (e) {
+
+    } catch (error) {
+
       console.error(
         "Search error:",
-        e.response?.data || e.message
+        error.response?.data ||
+          error.message
       );
 
-      alert("Search failed");
+      alert(
+        "Search failed"
+      );
+
     }
+
   }
 
 
@@ -363,30 +640,80 @@ export default function App() {
   // =====================================================
 
   async function openChat(user) {
+
     try {
+
       setChat(user);
 
-      chatRef.current = user;
+      chatRef.current =
+        user;
 
       setFound(null);
+
       setSearchEmail("");
 
       setTyping(false);
-      setOnline(!!user.online);
 
-      const r = await api.get(
-        `/api/messages/${user.id}`
+      setOnline(
+        !!user.online
       );
 
-      setMessages(r.data.messages || []);
-    } catch (e) {
+
+      const response =
+        await api.get(
+          `/api/messages/${user.id}`
+        );
+
+
+      setMessages(
+        response.data.messages || []
+      );
+
+
+      // Make sure chat exists in recent chats
+      setRecentChats(
+        (previous) => {
+
+          const exists =
+            previous.some(
+              (item) =>
+                String(item.id) ===
+                String(user.id)
+            );
+
+
+          if (exists) {
+            return previous;
+          }
+
+
+          return [
+            {
+              ...user,
+              lastMessage: "",
+              lastMessageAt:
+                new Date()
+            },
+            ...previous
+          ];
+
+        }
+      );
+
+    } catch (error) {
+
       console.error(
         "Open chat error:",
-        e.response?.data || e.message
+        error.response?.data ||
+          error.message
       );
 
-      alert("Could not load messages");
+      alert(
+        "Could not load messages"
+      );
+
     }
+
   }
 
 
@@ -395,71 +722,100 @@ export default function App() {
   // =====================================================
 
   async function send() {
-    if (!text.trim() || !chat) {
+
+    if (
+      !text.trim() ||
+      !chat
+    ) {
       return;
     }
 
-    const body = text.trim();
 
-    // Clear input immediately
+    const body =
+      text.trim();
+
+
     setText("");
 
-    // Stop typing
+
     socketRef.current?.emit(
       "stopTyping",
       {
-        receiver: chat.id,
+        receiver:
+          chat.id
       }
     );
 
-    try {
-      const r = await api.post(
-        "/api/messages",
-        {
-          receiver: chat.id,
-          text: body,
-        }
-      );
 
-      // Add immediately from API response.
-      // Socket.IO may also send it, but duplicate
-      // checking below prevents duplicate messages.
+    try {
+
+      const response =
+        await api.post(
+          "/api/messages",
+          {
+            receiver:
+              chat.id,
+
+            text:
+              body
+          }
+        );
+
 
       const sentMessage =
-        r.data.message;
+        response.data.message;
+
 
       if (sentMessage) {
-        setMessages((previous) => {
-          const exists = previous.some(
-            (item) =>
-              String(item._id) ===
-              String(sentMessage._id)
-          );
 
-          if (exists) {
-            return previous;
+        setMessages(
+          (previous) => {
+
+            const exists =
+              previous.some(
+                (item) =>
+                  String(item._id) ===
+                  String(
+                    sentMessage._id
+                  )
+              );
+
+
+            if (exists) {
+              return previous;
+            }
+
+
+            return [
+              ...previous,
+              sentMessage
+            ];
+
           }
+        );
 
-          return [
-            ...previous,
-            sentMessage,
-          ];
-        });
       }
-    } catch (e) {
+
+
+    } catch (error) {
+
       console.error(
         "Message sending error:",
-        e.response?.data || e.message
+        error.response?.data ||
+          error.message
       );
 
-      // Restore message if sending fails
+
       setText(body);
 
+
       alert(
-        e.response?.data?.message ||
-          "Message failed"
+        error.response?.data?.message ||
+        "Message failed"
       );
+
     }
+
   }
 
 
@@ -468,32 +824,47 @@ export default function App() {
   // =====================================================
 
   function handleTyping(e) {
-    const value = e.target.value;
+
+    const value =
+      e.target.value;
+
 
     setText(value);
 
+
     if (!chat) return;
+
 
     socketRef.current?.emit(
       "typing",
       {
-        receiver: chat.id,
+        receiver:
+          chat.id
       }
     );
+
 
     clearTimeout(
       typingTimer.current
     );
 
+
     typingTimer.current =
-      setTimeout(() => {
-        socketRef.current?.emit(
-          "stopTyping",
-          {
-            receiver: chat.id,
-          }
-        );
-      }, 900);
+      setTimeout(
+        () => {
+
+          socketRef.current?.emit(
+            "stopTyping",
+            {
+              receiver:
+                chat.id
+            }
+          );
+
+        },
+        900
+      );
+
   }
 
 
@@ -502,15 +873,51 @@ export default function App() {
   // =====================================================
 
   function logout() {
-    localStorage.removeItem("token");
+
+    localStorage.removeItem(
+      "token"
+    );
+
 
     socketRef.current?.disconnect();
 
+
     setToken(null);
+
     setMe(null);
+
     setChat(null);
+
     setMessages([]);
+
     setFound(null);
+
+    setRecentChats([]);
+
+  }
+
+
+  // =====================================================
+  // FORMAT TIME
+  // =====================================================
+
+  function formatChatTime(date) {
+
+    if (!date) {
+      return "";
+    }
+
+
+    return new Date(
+      date
+    ).toLocaleTimeString(
+      [],
+      {
+        hour: "2-digit",
+        minute: "2-digit"
+      }
+    );
+
   }
 
 
@@ -519,19 +926,25 @@ export default function App() {
   // =====================================================
 
   if (!token || !me) {
+
     return (
       <Auth
         mode={authMode}
         setMode={setAuthMode}
+
         name={name}
         setName={setName}
+
         email={email}
         setEmail={setEmail}
+
         password={password}
         setPassword={setPassword}
+
         submit={submitAuth}
       />
     );
+
   }
 
 
@@ -540,7 +953,9 @@ export default function App() {
   // =====================================================
 
   return (
+
     <div className="app">
+
 
       {/* =================================================
           SIDEBAR
@@ -554,18 +969,27 @@ export default function App() {
         }
       >
 
+
+        {/* HEADER */}
+
         <header>
 
           <div className="brand">
+
             <MessageCircle />
+
             ChatApp
+
           </div>
+
 
           <button
             onClick={logout}
             title="Logout"
           >
+
             <LogOut size={19} />
+
           </button>
 
         </header>
@@ -576,15 +1000,23 @@ export default function App() {
         <div className="me">
 
           <div className="avatar">
-            {me.name?.[0]?.toUpperCase()}
+
+            {me.name?.[0]
+              ?.toUpperCase()}
+
           </div>
 
+
           <div>
-            <b>{me.name}</b>
+
+            <b>
+              {me.name}
+            </b>
 
             <small>
               {me.email}
             </small>
+
           </div>
 
         </div>
@@ -596,22 +1028,32 @@ export default function App() {
 
           <Search size={18} />
 
+
           <input
             placeholder="Search by exact email..."
             value={searchEmail}
+
             onChange={(e) =>
               setSearchEmail(
                 e.target.value
               )
             }
+
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+
+              if (
+                e.key === "Enter"
+              ) {
                 search();
               }
+
             }}
           />
 
-          <button onClick={search}>
+
+          <button
+            onClick={search}
+          >
             Find
           </button>
 
@@ -621,6 +1063,7 @@ export default function App() {
         {/* SEARCH RESULT */}
 
         {found && (
+
           <div
             className="found"
             onClick={() =>
@@ -629,33 +1072,142 @@ export default function App() {
           >
 
             <div className="avatar">
-              {found.name?.[0]?.toUpperCase()}
+
+              {found.name?.[0]
+                ?.toUpperCase()}
+
             </div>
 
+
             <div>
-              <b>{found.name}</b>
+
+              <b>
+                {found.name}
+              </b>
 
               <small>
                 {found.email}
               </small>
+
             </div>
 
           </div>
+
         )}
 
 
-        {!found && (
-          <div className="empty-side">
+        {/* =================================================
+            RECENT CHATS
+        ================================================= */}
 
-            <MessageCircle size={42} />
+        <div className="recent-title">
 
-            <p>
-              Search someone's email
-              to start a direct chat.
-            </p>
+          RECENT CHATS
 
-          </div>
-        )}
+        </div>
+
+
+        <div className="recent-chats">
+
+          {recentChats.length === 0 ? (
+
+            <div className="empty-side">
+
+              <MessageCircle
+                size={42}
+              />
+
+              <p>
+                Search someone's email
+                to start a direct chat.
+              </p>
+
+            </div>
+
+          ) : (
+
+            recentChats.map(
+              (user) => (
+
+                <div
+                  key={user.id}
+                  className={
+                    "recent-chat " +
+                    (
+                      chat &&
+                      String(chat.id) ===
+                      String(user.id)
+                        ? "active"
+                        : ""
+                    )
+                  }
+
+                  onClick={() =>
+                    openChat(user)
+                  }
+                >
+
+
+                  <div className="chat-avatar-wrapper">
+
+                    <div className="avatar">
+
+                      {user.name?.[0]
+                        ?.toUpperCase()}
+
+                    </div>
+
+
+                    {user.online && (
+
+                      <span className="online-dot" />
+
+                    )}
+
+                  </div>
+
+
+                  <div className="recent-info">
+
+                    <div className="recent-top">
+
+                      <b>
+                        {user.name}
+                      </b>
+
+
+                      <small>
+
+                        {formatChatTime(
+                          user.lastMessageAt
+                        )}
+
+                      </small>
+
+                    </div>
+
+
+                    <div className="recent-bottom">
+
+                      <span>
+
+                        {user.lastMessage ||
+                          user.email}
+
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              )
+            )
+
+          )}
+
+        </div>
 
       </aside>
 
@@ -672,11 +1224,14 @@ export default function App() {
         }
       >
 
+
         {!chat ? (
 
           <div className="welcome">
 
-            <MessageCircle size={65} />
+            <MessageCircle
+              size={65}
+            />
 
             <h1>
               ChatApp
@@ -694,25 +1249,39 @@ export default function App() {
 
           <>
 
+
             {/* CHAT HEADER */}
 
             <header className="chat-head">
 
+
               <button
                 className="back"
+
                 onClick={() => {
+
                   setChat(null);
-                  chatRef.current = null;
+
+                  chatRef.current =
+                    null;
+
                   setMessages([]);
+
                   setTyping(false);
+
                 }}
               >
+
                 <ArrowLeft />
+
               </button>
 
 
               <div className="avatar">
-                {chat.name?.[0]?.toUpperCase()}
+
+                {chat.name?.[0]
+                  ?.toUpperCase()}
+
               </div>
 
 
@@ -721,6 +1290,7 @@ export default function App() {
                 <b>
                   {chat.name}
                 </b>
+
 
                 <small>
 
@@ -743,88 +1313,84 @@ export default function App() {
 
             <section className="messages">
 
-              {messages.map((message) => {
 
-                /*
-                  Backend sends:
-                  
-                  sender: {
-                    _id,
-                    name,
-                    email,
-                    avatar
-                  }
+              {messages.map(
+                (message) => {
 
-                  But old messages may contain:
-                  
-                  sender: "ID"
-
-                  So handle both.
-                */
-
-                const senderId =
-                  typeof message.sender ===
-                  "object"
-                    ? message.sender?._id
-                    : message.sender;
+                  const senderId =
+                    typeof message.sender ===
+                    "object"
+                      ? message.sender?._id
+                      : message.sender;
 
 
-                const isMine =
-                  String(senderId) ===
-                  String(me.id);
+                  const isMine =
+                    String(
+                      senderId
+                    ) ===
+                    String(me.id);
 
 
-                return (
+                  return (
 
-                  <div
-                    key={message._id}
-                    className={
-                      `bubble ${
-                        isMine
-                          ? "mine"
-                          : "theirs"
-                      }`
-                    }
-                  >
+                    <div
+                      key={
+                        message._id
+                      }
 
-                    <span>
-                      {message.text}
-                    </span>
+                      className={
+                        `bubble ${
+                          isMine
+                            ? "mine"
+                            : "theirs"
+                        }`
+                      }
+                    >
 
-                    <small>
-
-                      {new Date(
-                        message.createdAt
-                      ).toLocaleTimeString(
-                        [],
-                        {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }
-                      )}
+                      <span>
+                        {message.text}
+                      </span>
 
 
-                      {isMine &&
-                        (
-                          message.read
-                            ? (
-                              <CheckCheck
-                                size={14}
-                              />
-                            )
-                            : (
-                              <Check
-                                size={14}
-                              />
-                            )
+                      <small>
+
+                        {new Date(
+                          message.createdAt
+                        ).toLocaleTimeString(
+                          [],
+                          {
+                            hour:
+                              "2-digit",
+
+                            minute:
+                              "2-digit"
+                          }
                         )}
 
-                    </small>
 
-                  </div>
+                        {isMine &&
+                          (
+                            message.read
+                              ? (
+                                <CheckCheck
+                                  size={14}
+                                />
+                              )
+                              : (
+                                <Check
+                                  size={14}
+                                />
+                              )
+                          )}
 
-                );
-              })}
+                      </small>
+
+                    </div>
+
+                  );
+
+                }
+              )}
 
 
               <div ref={bottom} />
@@ -832,35 +1398,46 @@ export default function App() {
             </section>
 
 
-            {/* =================================================
-                MESSAGE INPUT
-            ================================================= */}
+            {/* MESSAGE COMPOSER */}
 
             <div className="composer">
 
               <input
+
                 value={text}
-                onChange={handleTyping}
+
+                onChange={
+                  handleTyping
+                }
+
                 onKeyDown={(e) => {
 
                   if (
-                    e.key === "Enter" &&
+                    e.key ===
+                      "Enter" &&
                     !e.shiftKey
                   ) {
 
                     e.preventDefault();
 
                     send();
+
                   }
 
                 }}
+
                 placeholder="Type a message"
+
               />
 
 
-              <button onClick={send}>
+              <button
+                onClick={send}
+              >
 
-                <Send size={20} />
+                <Send
+                  size={20}
+                />
 
               </button>
 
@@ -873,7 +1450,9 @@ export default function App() {
       </main>
 
     </div>
+
   );
+
 }
 
 
@@ -884,23 +1463,33 @@ export default function App() {
 function Auth({
   mode,
   setMode,
+
   name,
   setName,
+
   email,
   setEmail,
+
   password,
   setPassword,
-  submit,
+
+  submit
 }) {
 
   return (
 
     <div className="auth">
 
-      <form onSubmit={submit}>
+      <form
+        onSubmit={submit}
+      >
 
         <div className="logo">
-          <MessageCircle size={48} />
+
+          <MessageCircle
+            size={48}
+          />
+
         </div>
 
 
@@ -920,9 +1509,13 @@ function Auth({
           <input
             placeholder="Your name"
             value={name}
+
             onChange={(e) =>
-              setName(e.target.value)
+              setName(
+                e.target.value
+              )
             }
+
             required
           />
 
@@ -933,9 +1526,13 @@ function Auth({
           type="email"
           placeholder="Email"
           value={email}
+
           onChange={(e) =>
-            setEmail(e.target.value)
+            setEmail(
+              e.target.value
+            )
           }
+
           required
         />
 
@@ -944,14 +1541,20 @@ function Auth({
           type="password"
           placeholder="Password (6+ characters)"
           value={password}
+
           onChange={(e) =>
-            setPassword(e.target.value)
+            setPassword(
+              e.target.value
+            )
           }
+
           required
         />
 
 
-        <button className="primary">
+        <button
+          className="primary"
+        >
 
           {mode === "login"
             ? "Login"
@@ -963,6 +1566,7 @@ function Auth({
         <button
           type="button"
           className="switch"
+
           onClick={() =>
             setMode(
               mode === "login"
@@ -981,5 +1585,6 @@ function Auth({
       </form>
 
     </div>
+
   );
 }
