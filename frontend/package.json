@@ -1,0 +1,20 @@
+{
+  "name": "whatsapp-email-chat-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "axios": "^1.11.0",
+    "vite": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "socket.io-client": "^4.8.1",
+    "lucide-react": "^0.468.0"
+  },
+  "devDependencies": {}
+}
