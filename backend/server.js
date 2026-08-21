@@ -1,4 +1,5 @@
 require("dotenv").config();
+
 const http = require("http");
 const express = require("express");
 const cors = require("cors");
@@ -10,21 +11,33 @@ const { Server } = require("socket.io");
 const app = express();
 const server = http.createServer(app);
 
+// =====================================================
+// SOCKET.IO
+// =====================================================
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin:
+      process.env.CLIENT_URL ||
+      "http://localhost:5173",
+
     methods: ["GET", "POST"]
   }
 });
 
+// =====================================================
+// MIDDLEWARE
+// =====================================================
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173"
+    origin:
+      process.env.CLIENT_URL ||
+      "http://localhost:5173"
   })
 );
 
 app.use(express.json());
-
 
 // =====================================================
 // USER SCHEMA
@@ -68,7 +81,6 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
-
 // =====================================================
 // MESSAGE SCHEMA
 // =====================================================
@@ -104,7 +116,6 @@ const MessageSchema = new mongoose.Schema(
   }
 );
 
-
 // =====================================================
 // CONVERSATION SCHEMA
 // =====================================================
@@ -138,12 +149,14 @@ ConversationSchema.index({
   participants: 1
 });
 
-
 // =====================================================
 // MODELS
 // =====================================================
 
-const User = mongoose.model("User", UserSchema);
+const User = mongoose.model(
+  "User",
+  UserSchema
+);
 
 const Message = mongoose.model(
   "Message",
@@ -155,16 +168,14 @@ const Conversation = mongoose.model(
   ConversationSchema
 );
 
-
 // =====================================================
 // ONLINE USERS
 // =====================================================
 
 const onlineUsers = new Map();
 
-
 // =====================================================
-// JWT TOKEN
+// JWT
 // =====================================================
 
 function signToken(user) {
@@ -172,13 +183,14 @@ function signToken(user) {
     {
       id: user._id.toString()
     },
+
     process.env.JWT_SECRET,
+
     {
       expiresIn: "7d"
     }
   );
 }
-
 
 // =====================================================
 // AUTH MIDDLEWARE
@@ -198,36 +210,42 @@ function auth(req, res, next) {
     req.userId = payload.id;
 
     next();
-  } catch (e) {
+  } catch (error) {
     return res.status(401).json({
-      message: "Invalid or expired token"
+      message:
+        "Invalid or expired token"
     });
   }
 }
 
-
 // =====================================================
-// HEALTH CHECK
+// HEALTH
 // =====================================================
 
-app.get("/api/health", (req, res) => {
-  res.json({
-    ok: true
-  });
-});
-
+app.get(
+  "/api/health",
+  (req, res) => {
+    res.json({
+      ok: true
+    });
+  }
+);
 
 // =====================================================
 // ROOT
 // =====================================================
 
-app.get("/", (req, res) => {
-  res.json({
-    message: "WhatsApp Email Chat Backend is running",
-    status: "OK"
-  });
-});
+app.get(
+  "/",
+  (req, res) => {
+    res.json({
+      message:
+        "WhatsApp Email Chat Backend is running",
 
+      status: "OK"
+    });
+  }
+);
 
 // =====================================================
 // REGISTER
@@ -235,6 +253,7 @@ app.get("/", (req, res) => {
 
 app.post(
   "/api/auth/register",
+
   async (req, res) => {
     try {
       const {
@@ -243,7 +262,11 @@ app.post(
         password
       } = req.body;
 
-      if (!name || !email || !password) {
+      if (
+        !name ||
+        !email ||
+        !password
+      ) {
         return res.status(400).json({
           message:
             "Name, email and password are required"
@@ -257,28 +280,35 @@ app.post(
         });
       }
 
-      const normalized =
-        email.toLowerCase().trim();
+      const normalizedEmail =
+        email
+          .toLowerCase()
+          .trim();
 
-      if (
+      const existingUser =
         await User.findOne({
-          email: normalized
-        })
-      ) {
+          email: normalizedEmail
+        });
+
+      if (existingUser) {
         return res.status(409).json({
           message:
             "Email already registered"
         });
       }
 
-      const hash =
-        await bcrypt.hash(password, 12);
+      const hashedPassword =
+        await bcrypt.hash(
+          password,
+          12
+        );
 
-      const user = await User.create({
-        name,
-        email: normalized,
-        password: hash
-      });
+      const user =
+        await User.create({
+          name,
+          email: normalizedEmail,
+          password: hashedPassword
+        });
 
       res.status(201).json({
         token: signToken(user),
@@ -290,19 +320,19 @@ app.post(
           avatar: user.avatar
         }
       });
-    } catch (e) {
+    } catch (error) {
       console.error(
         "Registration error:",
-        e.message
+        error
       );
 
       res.status(500).json({
-        message: "Registration failed"
+        message:
+          "Registration failed"
       });
     }
   }
 );
-
 
 // =====================================================
 // LOGIN
@@ -310,6 +340,7 @@ app.post(
 
 app.post(
   "/api/auth/login",
+
   async (req, res) => {
     try {
       const {
@@ -317,11 +348,14 @@ app.post(
         password
       } = req.body;
 
+      const normalizedEmail =
+        (email || "")
+          .toLowerCase()
+          .trim();
+
       const user =
         await User.findOne({
-          email: (email || "")
-            .toLowerCase()
-            .trim()
+          email: normalizedEmail
         });
 
       if (
@@ -347,19 +381,19 @@ app.post(
           avatar: user.avatar
         }
       });
-    } catch (e) {
+    } catch (error) {
       console.error(
         "Login error:",
-        e.message
+        error
       );
 
       res.status(500).json({
-        message: "Login failed"
+        message:
+          "Login failed"
       });
     }
   }
 );
-
 
 // =====================================================
 // CURRENT USER
@@ -367,99 +401,129 @@ app.post(
 
 app.get(
   "/api/auth/me",
-  auth,
-  async (req, res) => {
-    const u =
-      await User.findById(
-        req.userId
-      ).select("-password");
 
-    if (!u) {
-      return res.status(404).json({
-        message: "User not found"
+  auth,
+
+  async (req, res) => {
+    try {
+      const user =
+        await User.findById(
+          req.userId
+        ).select("-password");
+
+      if (!user) {
+        return res.status(404).json({
+          message:
+            "User not found"
+        });
+      }
+
+      res.json({
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar
+        }
+      });
+    } catch (error) {
+      console.error(
+        "Get current user error:",
+        error
+      );
+
+      res.status(500).json({
+        message:
+          "Could not get user"
       });
     }
-
-    res.json({
-      user: {
-        id: u._id,
-        name: u.name,
-        email: u.email,
-        avatar: u.avatar
-      }
-    });
   }
 );
 
-
 // =====================================================
-// SEARCH USER BY EXACT EMAIL
+// EXACT EMAIL SEARCH
 // =====================================================
 
 app.get(
   "/api/users/search",
+
   auth,
+
   async (req, res) => {
-    const email = (
-      req.query.email || ""
-    )
-      .toLowerCase()
-      .trim();
+    try {
+      const email =
+        (req.query.email || "")
+          .toLowerCase()
+          .trim();
 
-    if (!email) {
-      return res.json({
-        user: null
+      if (!email) {
+        return res.json({
+          user: null
+        });
+      }
+
+      const user =
+        await User.findOne({
+          email
+        }).select(
+          "_id name email avatar lastSeen"
+        );
+
+      if (
+        !user ||
+        user._id.toString() ===
+          req.userId
+      ) {
+        return res.json({
+          user: null
+        });
+      }
+
+      res.json({
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+
+          online:
+            onlineUsers.has(
+              user._id.toString()
+            ),
+
+          lastSeen:
+            user.lastSeen
+        }
       });
-    }
-
-    const u =
-      await User.findOne({
-        email
-      }).select(
-        "_id name email avatar lastSeen"
+    } catch (error) {
+      console.error(
+        "Search error:",
+        error
       );
 
-    if (
-      !u ||
-      u._id.toString() ===
-        req.userId
-    ) {
-      return res.json({
-        user: null
+      res.status(500).json({
+        message:
+          "Search failed"
       });
     }
-
-    res.json({
-      user: {
-        id: u._id,
-        name: u.name,
-        email: u.email,
-        avatar: u.avatar,
-
-        online:
-          onlineUsers.has(
-            u._id.toString()
-          ),
-
-        lastSeen: u.lastSeen
-      }
-    });
   }
 );
 
-
 // =====================================================
-// GET RECENT CHATS
+// RECENT CHATS
 // =====================================================
 
 app.get(
   "/api/conversations",
+
   auth,
+
   async (req, res) => {
     try {
       const conversations =
         await Conversation.find({
-          participants: req.userId
+          participants:
+            req.userId
         })
           .populate(
             "participants",
@@ -471,48 +535,57 @@ app.get(
 
       const result =
         conversations
-          .map((conversation) => {
-            const otherUser =
-              conversation.participants.find(
-                (user) =>
-                  user._id.toString() !==
-                  req.userId
-              );
+          .map(
+            (conversation) => {
+              const otherUser =
+                conversation.participants.find(
+                  (user) =>
+                    user._id.toString() !==
+                    req.userId
+                );
 
-            if (!otherUser) {
-              return null;
+              if (!otherUser) {
+                return null;
+              }
+
+              return {
+                id: otherUser._id,
+
+                name:
+                  otherUser.name,
+
+                email:
+                  otherUser.email,
+
+                avatar:
+                  otherUser.avatar,
+
+                online:
+                  onlineUsers.has(
+                    otherUser._id.toString()
+                  ),
+
+                lastSeen:
+                  otherUser.lastSeen,
+
+                lastMessage:
+                  conversation.lastMessage,
+
+                lastMessageAt:
+                  conversation.lastMessageAt
+              };
             }
-
-            return {
-              id: otherUser._id,
-              name: otherUser.name,
-              email: otherUser.email,
-              avatar: otherUser.avatar,
-
-              online:
-                onlineUsers.has(
-                  otherUser._id.toString()
-                ),
-
-              lastSeen:
-                otherUser.lastSeen,
-
-              lastMessage:
-                conversation.lastMessage,
-
-              lastMessageAt:
-                conversation.lastMessageAt
-            };
-          })
+          )
           .filter(Boolean);
 
       res.json({
-        conversations: result
+        conversations:
+          result
       });
-    } catch (e) {
+    } catch (error) {
       console.error(
-        "Conversation fetch error:",
-        e.message
+        "Recent chats error:",
+        error
       );
 
       res.status(500).json({
@@ -523,29 +596,37 @@ app.get(
   }
 );
 
-
 // =====================================================
 // GET MESSAGES
 // =====================================================
 
 app.get(
   "/api/messages/:userId",
+
   auth,
+
   async (req, res) => {
     try {
-      const other =
+      const otherUserId =
         req.params.userId;
 
       const messages =
         await Message.find({
           $or: [
             {
-              sender: req.userId,
-              receiver: other
+              sender:
+                req.userId,
+
+              receiver:
+                otherUserId
             },
+
             {
-              sender: other,
-              receiver: req.userId
+              sender:
+                otherUserId,
+
+              receiver:
+                req.userId
             }
           ]
         })
@@ -554,12 +635,18 @@ app.get(
           })
           .limit(500);
 
+      // Mark received messages as read
       await Message.updateMany(
         {
-          sender: other,
-          receiver: req.userId,
+          sender:
+            otherUserId,
+
+          receiver:
+            req.userId,
+
           read: false
         },
+
         {
           $set: {
             read: true
@@ -570,10 +657,10 @@ app.get(
       res.json({
         messages
       });
-    } catch (e) {
+    } catch (error) {
       console.error(
         "Get messages error:",
-        e.message
+        error
       );
 
       res.status(500).json({
@@ -584,14 +671,15 @@ app.get(
   }
 );
 
-
 // =====================================================
 // SEND MESSAGE
 // =====================================================
 
 app.post(
   "/api/messages",
+
   auth,
+
   async (req, res) => {
     try {
       const {
@@ -601,7 +689,8 @@ app.post(
 
       if (
         !receiver ||
-        !text?.trim()
+        !text ||
+        !text.trim()
       ) {
         return res.status(400).json({
           message:
@@ -609,139 +698,182 @@ app.post(
         });
       }
 
-      const msg =
+      const cleanText =
+        text.trim();
+
+      // -------------------------------------------------
+      // CREATE MESSAGE
+      // -------------------------------------------------
+
+      const message =
         await Message.create({
-          sender: req.userId,
-          receiver,
-          text: text.trim()
+          sender:
+            req.userId,
+
+          receiver:
+            receiver,
+
+          text:
+            cleanText
         });
 
+      // -------------------------------------------------
+      // FIND CONVERSATION
+      // -------------------------------------------------
 
-      // =================================================
-      // CREATE / UPDATE CONVERSATION
-      // =================================================
-
-      const conversation =
-        await Conversation.findOneAndUpdate(
-          {
-            participants: {
-              $all: [
-                req.userId,
-                receiver
-              ]
-            }
-          },
-          {
-            $set: {
-              lastMessage:
-                text.trim(),
-
-              lastMessageAt:
-                new Date()
-            },
-
-            $addToSet: {
-              participants: {
-                $each: [
-                  req.userId,
-                  receiver
-                ]
-              }
-            }
-          },
-          {
-            new: true,
-            upsert: true,
-            setDefaultsOnInsert: true
+      let conversation =
+        await Conversation.findOne({
+          participants: {
+            $all: [
+              req.userId,
+              receiver
+            ]
           }
-        );
+        });
 
+      // -------------------------------------------------
+      // CREATE CONVERSATION
+      // -------------------------------------------------
 
-      const populated =
-        await msg.populate(
+      if (!conversation) {
+        conversation =
+          await Conversation.create({
+            participants: [
+              req.userId,
+              receiver
+            ],
+
+            lastMessage:
+              cleanText,
+
+            lastMessageAt:
+              new Date()
+          });
+      }
+
+      // -------------------------------------------------
+      // UPDATE CONVERSATION
+      // -------------------------------------------------
+
+      else {
+        conversation.lastMessage =
+          cleanText;
+
+        conversation.lastMessageAt =
+          new Date();
+
+        await conversation.save();
+      }
+
+      // -------------------------------------------------
+      // POPULATE SENDER
+      // -------------------------------------------------
+
+      const populatedMessage =
+        await message.populate(
           "sender",
           "name email avatar"
         );
 
       const payload =
-        populated.toObject();
+        populatedMessage.toObject();
 
-
-      // =================================================
+      // -------------------------------------------------
       // SEND MESSAGE TO RECEIVER
-      // =================================================
+      // -------------------------------------------------
 
       io
-        .to(`user:${receiver}`)
+        .to(
+          `user:${receiver}`
+        )
         .emit(
           "message:new",
           payload
         );
 
-
-      // =================================================
+      // -------------------------------------------------
       // SEND MESSAGE TO SENDER
-      // =================================================
+      // -------------------------------------------------
 
       io
-        .to(`user:${req.userId}`)
+        .to(
+          `user:${req.userId}`
+        )
         .emit(
           "message:sent",
           payload
         );
 
-
-      // =================================================
-      // SEND CHAT LIST UPDATE
-      // =================================================
+      // -------------------------------------------------
+      // UPDATE RECEIVER RECENT CHAT
+      // -------------------------------------------------
 
       io
-        .to(`user:${receiver}`)
+        .to(
+          `user:${receiver}`
+        )
         .emit(
           "conversation:update",
           {
-            userId: req.userId,
+            userId:
+              req.userId,
+
             lastMessage:
-              text.trim(),
+              cleanText,
+
             lastMessageAt:
               conversation.lastMessageAt
           }
         );
 
+      // -------------------------------------------------
+      // UPDATE SENDER RECENT CHAT
+      // -------------------------------------------------
+
       io
-        .to(`user:${req.userId}`)
+        .to(
+          `user:${req.userId}`
+        )
         .emit(
           "conversation:update",
           {
-            userId: receiver,
+            userId:
+              receiver,
+
             lastMessage:
-              text.trim(),
+              cleanText,
+
             lastMessageAt:
               conversation.lastMessageAt
           }
         );
 
+      // -------------------------------------------------
+      // RESPONSE
+      // -------------------------------------------------
 
-      res.status(201).json({
-        message: payload
+      return res.status(201).json({
+        message:
+          payload
       });
-    } catch (e) {
+
+    } catch (error) {
       console.error(
-        "Send message error:",
-        e.message
+        "SEND MESSAGE ERROR:",
+        error
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         message:
+          error.message ||
           "Message sending failed"
       });
     }
   }
 );
 
-
 // =====================================================
-// SOCKET AUTHENTICATION
+// SOCKET AUTH
 // =====================================================
 
 io.use(
@@ -750,6 +882,14 @@ io.use(
       const token =
         socket.handshake
           .auth?.token;
+
+      if (!token) {
+        return next(
+          new Error(
+            "Unauthorized"
+          )
+        );
+      }
 
       const payload =
         jwt.verify(
@@ -761,7 +901,8 @@ io.use(
         payload.id;
 
       next();
-    } catch (e) {
+
+    } catch (error) {
       next(
         new Error(
           "Unauthorized"
@@ -771,7 +912,6 @@ io.use(
   }
 );
 
-
 // =====================================================
 // SOCKET CONNECTION
 // =====================================================
@@ -779,82 +919,113 @@ io.use(
 io.on(
   "connection",
   (socket) => {
-    const id =
+
+    const userId =
       socket.userId;
 
+    // -------------------------------------------------
+    // USER ROOM
+    // -------------------------------------------------
+
     socket.join(
-      `user:${id}`
+      `user:${userId}`
     );
+
+    // -------------------------------------------------
+    // ONLINE USER COUNT
+    // -------------------------------------------------
 
     onlineUsers.set(
-      id,
-      (onlineUsers.get(id) || 0) + 1
+      userId,
+
+      (onlineUsers.get(
+        userId
+      ) || 0) + 1
     );
 
-    io.emit("presence", {
-      userId: id,
-      online: true
-    });
+    io.emit(
+      "presence",
+      {
+        userId,
+        online: true
+      }
+    );
 
-
-    // =================================================
+    // -------------------------------------------------
     // TYPING
-    // =================================================
+    // -------------------------------------------------
 
     socket.on(
       "typing",
+
       ({ receiver }) => {
-        if (receiver) {
-          io
-            .to(`user:${receiver}`)
-            .emit(
-              "typing",
-              {
-                userId: id
-              }
-            );
+
+        if (!receiver) {
+          return;
         }
+
+        io
+          .to(
+            `user:${receiver}`
+          )
+          .emit(
+            "typing",
+            {
+              userId
+            }
+          );
       }
     );
 
-
-    // =================================================
+    // -------------------------------------------------
     // STOP TYPING
-    // =================================================
+    // -------------------------------------------------
 
     socket.on(
       "stopTyping",
+
       ({ receiver }) => {
-        if (receiver) {
-          io
-            .to(`user:${receiver}`)
-            .emit(
-              "stopTyping",
-              {
-                userId: id
-              }
-            );
+
+        if (!receiver) {
+          return;
         }
+
+        io
+          .to(
+            `user:${receiver}`
+          )
+          .emit(
+            "stopTyping",
+            {
+              userId
+            }
+          );
       }
     );
 
-
-    // =================================================
+    // -------------------------------------------------
     // MESSAGE READ
-    // =================================================
+    // -------------------------------------------------
 
     socket.on(
       "message:read",
+
       async ({
         messageId,
         senderId
       }) => {
+
         try {
+
           await Message.findOneAndUpdate(
             {
-              _id: messageId,
-              receiver: id
+              _id:
+                messageId,
+
+              receiver:
+                userId
             },
+
             {
               $set: {
                 read: true
@@ -863,59 +1034,86 @@ io.on(
           );
 
           if (senderId) {
+
             io
-              .to(`user:${senderId}`)
+              .to(
+                `user:${senderId}`
+              )
               .emit(
                 "message:read",
                 {
                   messageId
                 }
               );
+
           }
-        } catch (e) {}
+
+        } catch (error) {
+
+          console.error(
+            "Message read error:",
+            error
+          );
+
+        }
       }
     );
 
-
-    // =================================================
+    // -------------------------------------------------
     // DISCONNECT
-    // =================================================
+    // -------------------------------------------------
 
     socket.on(
       "disconnect",
+
       async () => {
+
         const count =
-          (onlineUsers.get(id) || 1) -
-          1;
+          (onlineUsers.get(
+            userId
+          ) || 1) - 1;
 
         if (count <= 0) {
-          onlineUsers.delete(id);
+
+          onlineUsers.delete(
+            userId
+          );
+
+          const lastSeen =
+            new Date();
 
           await User.findByIdAndUpdate(
-            id,
+            userId,
+
             {
-              lastSeen:
-                new Date()
+              lastSeen
             }
           );
 
-          io.emit("presence", {
-            userId: id,
-            online: false,
-            lastSeen:
-              new Date()
-          });
+          io.emit(
+            "presence",
+            {
+              userId,
+
+              online:
+                false,
+
+              lastSeen
+            }
+          );
+
         } else {
+
           onlineUsers.set(
-            id,
+            userId,
             count
           );
+
         }
       }
     );
   }
 );
-
 
 // =====================================================
 // MONGODB CONNECTION
@@ -925,27 +1123,40 @@ mongoose
   .connect(
     process.env.MONGO_URI
   )
+
   .then(() => {
+
     console.log(
-      "✅ MongoDB Connected Successfully"
+      "MongoDB Connected Successfully"
     );
+
+    const PORT =
+      process.env.PORT ||
+      5000;
 
     server.listen(
-      process.env.PORT || 5000,
+      PORT,
+
       () => {
+
         console.log(
-          `🚀 Server running on port ${
-            process.env.PORT || 5000
-          }`
+          `Server running on port ${PORT}`
         );
+
       }
     );
-  })
-  .catch((err) => {
-    console.error(
-      "❌ MongoDB connection failed:",
-      err.message
-    );
 
-    process.exit(1);
-  });
+  })
+
+  .catch(
+    (error) => {
+
+      console.error(
+        "MongoDB connection failed:",
+        error.message
+      );
+
+      process.exit(1);
+
+    }
+  );
